@@ -25,8 +25,8 @@ extern "C" {
     #include "esp_qmc5883l.h"
 #endif
 
-#define DT_MS              1 // time step in ms
-#define GYRO_MEAN_ERROR    M_PI*10.0f/180.0f // gyroscope mean error in rad/s
+#define DT_MS              2 // time step in ms
+#define GYRO_MEAN_ERROR    M_PI*5.0f/180.0f // gyroscope mean error in rad/s
 #define MADGWICK_BETA      sqrtf(3.0f/4.0f)*GYRO_MEAN_ERROR // filter gain
 
 // #define TEST_PERFORMANCE 1 // uncomment for performance measurement
@@ -56,6 +56,8 @@ void esp_madgwick_init(esp_madgwick_conf_t* conf);
 void esp_madgwick_read_sensors(esp_madgwick_sensors_t* sensors);
 
 void esp_madgwick_get_attitude(float* roll, float* pitch, float* yaw);
+
+void esp_madgwick_restart();
 
 #ifdef __cplusplus
 }

@@ -3,6 +3,8 @@
 
 i2c_master_bus_handle_t bus_handle;
 
+static portMUX_TYPE spinlock = portMUX_INITIALIZER_UNLOCKED;
+static bool filter_restart = false;
 static SemaphoreHandle_t mutex = NULL;
 static dspm::Mat q_attitude(4, 1);
 
@@ -33,7 +35,6 @@ static void quat_to_euler(dspm::Mat q, float* roll, float* pitch, float* yaw)
 
     *yaw = atan2f(2.0f*(q(1, 0)*q(2, 0) + q(0, 0)*q(3, 0)),
                     powf(q(0, 0), 2.0f) + powf(q(1, 0), 2.0f) - powf(q(2, 0), 2.0f) - powf(q(3, 0), 2.0f));
-
 }
 
 
@@ -148,6 +149,19 @@ static IRAM_ATTR void esp_madgwick_filter_task(void* arg)
 
         xLastWakeTime = xTaskGetTickCount();
 
+        if (filter_restart)
+        {
+            // restart the filter
+            q_est(0, 0) = 1.0f;
+            q_est(1, 0) = 0.0f;
+            q_est(2, 0) = 0.0f;
+            q_est(3, 0) = 0.0f;
+
+            portENTER_CRITICAL(&spinlock);
+            filter_restart = false;
+            portEXIT_CRITICAL(&spinlock);
+        }
+
         // read sensors data
         esp_madgwick_read_sensors(&sensors);
 
@@ -242,7 +256,6 @@ static IRAM_ATTR void esp_madgwick_filter_task(void* arg)
         else
             ESP_LOGE(TAG, "Failed to take mutex");
 
-
 #ifdef TEST_PERFORMANCE
         uint64_t loop_end = esp_timer_get_time() - loop_start;
         ESP_LOGI(TAG, "%lld us", loop_end);
@@ -301,6 +314,9 @@ extern "C" void esp_madgwick_init(esp_madgwick_conf_t* conf)
     hmc.i2c_freq = conf->i2c_freq;
     hmc.drdy_pin = GPIO_NUM_NC;
     hmc5883l_init(hmc);
+    hmc5883l_write_config(hmc, HMC5883L_OVER_SAMPLE_8, HMC5883L_DATA_OUTPUT_RATE_75_HZ,
+                            HMC5883L_MODE_NORMAL, HMC5883L_GAIN_1090);
+    hmc5883l_write_mode(hmc, HMC5883L_CONTINUOUS_MODE);
 #elif defined(MADGWICK_MAGNETOMETER_QMC)
     // init QMC5883L
     qmc.i2c_port = conf->i2c_port;
@@ -309,9 +325,16 @@ extern "C" void esp_madgwick_init(esp_madgwick_conf_t* conf)
     qmc.i2c_freq = conf->i2c_freq;
     qmc.drdy_pin = GPIO_NUM_NC;
     qmc5883l_init(qmc);
+    qmc5883l_write_control(qmc, QMC5883L_OVER_SAMPLE_RATIO_512, QMC5883L_FULL_SCALE_2G,
+                            QMC5883L_DATA_OUTPUT_RATE_200, QMC5883L_CONTINUOUS_MODE,
+                            QMC5883L_POINTER_ROLLOVER_FUNCTION_NORMAL, QMC5883L_INTERRUPT_DISABLE);
 #endif
 
-    xTaskCreate(esp_madgwick_filter_task, "esp_madgwick_filter_task", 4096, NULL, 10, NULL);
+    // optional calibration
+    // mpu6050_calibrate_gyro(mpu);
+    // hmc5883l_calibrate(hmc);
+
+    xTaskCreate(esp_madgwick_filter_task, "esp_madgwick_filter_task", 4096, NULL, 17, NULL);
 }
 
 /**
@@ -326,9 +349,9 @@ extern "C" void esp_madgwick_read_sensors(esp_madgwick_sensors_t* sensors)
     mpu6050_read_gyroscope(mpu, &sensors->gx, &sensors->gy, &sensors->gz);
 
     // read magnetometer data
-#ifdef MADWICK_MAGNETOMETER_HMC
+#ifdef MADGWICK_MAGNETOMETER_HMC
     hmc5883l_read_magnetometer(hmc, &sensors->mx, &sensors->my, &sensors->mz);
-#elif defined(MADWICK_MAGNETOMETER_QMC)
+#elif defined(MADGWICK_MAGNETOMETER_QMC)
     qmc5883l_read_magnetometer(qmc, &sensors->mx, &sensors->my, &sensors->mz);
 #endif
 
@@ -347,8 +370,24 @@ extern "C" void esp_madgwick_read_sensors(esp_madgwick_sensors_t* sensors)
     sensors->mx = sensors->my;
     sensors->my = -buf;
 
+    // debug
+    // ESP_LOGI(TAG, "acc:\t%f\t%f\t%f", sensors->ax, sensors->ay, sensors->az);
+    // ESP_LOGI(TAG, "gyro:\t%f\t%f\t%f", sensors->gx, sensors->gy, sensors->gz);
+    // ESP_LOGI(TAG, "mag:\t%f\t%f\t%f", sensors->mx, sensors->my, sensors->mz);
+
     // change gyroscope readings to radians
     sensors->gx = sensors->gx*M_PI/180.0f;
     sensors->gy = sensors->gy*M_PI/180.0f;
     sensors->gz = sensors->gz*M_PI/180.0f;
+}
+
+
+/**
+ * @brief restart Madgwick filter
+ */
+extern "C" void esp_madgwick_restart()
+{
+    portENTER_CRITICAL(&spinlock);
+    filter_restart = true;
+    portEXIT_CRITICAL(&spinlock);
 }
