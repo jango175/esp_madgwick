@@ -1,3 +1,11 @@
+/**
+ * @file esp_madgwick.cpp
+ * @author jango175
+ * @brief ESP-IDF Madgwick MARG filter
+ * 
+ * @copyright Apache 2.0
+*/
+
 #include <stdio.h>
 #include "esp_madgwick.h"
 
