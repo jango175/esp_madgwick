@@ -15,6 +15,7 @@ static portMUX_TYPE spinlock = portMUX_INITIALIZER_UNLOCKED;
 static bool filter_restart = false;
 static SemaphoreHandle_t mutex = NULL;
 static dspm::Mat q_attitude(4, 1);
+static dspm::Mat q_gyro(4, 1);
 
 static mpu6050_conf_t mpu;
 #ifdef MADGWICK_MAGNETOMETER_HMC
@@ -69,6 +70,27 @@ extern "C" void esp_madgwick_get_attitude(float* roll, float* pitch, float* yaw)
         *roll = *roll*180.0f/M_PI;
         *pitch = *pitch*180.0f/M_PI;
         *yaw = *yaw*180.0f/M_PI;
+    }
+    else
+        ESP_LOGE(TAG, "Failed to take mutex");
+}
+
+
+/**
+ * @brief get gyroscope data
+ * 
+ * @param gx pointer to gyroscope x axis data in deg/s
+ * @param gy pointer to gyroscope y axis data in deg/s
+ * @param gz pointer to gyroscope z axis data in deg/s
+ */
+extern "C" void esp_madgwick_get_gyro(float* gx, float* gy, float* gz)
+{
+    if (xSemaphoreTake(mutex, portMAX_DELAY) == pdTRUE)
+    {
+        *gx = q_gyro(1, 0)*180.0f/M_PI;
+        *gy = q_gyro(2, 0)*180.0f/M_PI;
+        *gz = q_gyro(3, 0)*180.0f/M_PI;
+        xSemaphoreGive(mutex);
     }
     else
         ESP_LOGE(TAG, "Failed to take mutex");
@@ -259,6 +281,7 @@ static IRAM_ATTR void esp_madgwick_filter_task(void* arg)
         if (xSemaphoreTake(mutex, DT_MS/portTICK_PERIOD_MS) == pdTRUE)
         {
             q_attitude = q_est;
+            q_gyro = q_origin;
             xSemaphoreGive(mutex);
         }
         else

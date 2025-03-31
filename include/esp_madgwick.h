@@ -37,7 +37,7 @@ extern "C" {
 #define GYRO_MEAN_ERROR    M_PI*5.0f/180.0f // gyroscope mean error in rad/s
 #define MADGWICK_BETA      sqrtf(3.0f/4.0f)*GYRO_MEAN_ERROR // filter gain
 
-// #define TEST_PERFORMANCE 1 // uncomment for performance measurement
+// #define TEST_PERFORMANCE   1 // uncomment for performance measurement
 
 typedef struct {
     i2c_port_num_t i2c_port;
@@ -64,6 +64,8 @@ void esp_madgwick_init(esp_madgwick_conf_t* conf);
 void esp_madgwick_read_sensors(esp_madgwick_sensors_t* sensors);
 
 void esp_madgwick_get_attitude(float* roll, float* pitch, float* yaw);
+
+void esp_madgwick_get_gyro(float* gx, float* gy, float* gz);
 
 void esp_madgwick_restart();
 
