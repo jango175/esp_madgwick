@@ -383,6 +383,7 @@ extern "C" void esp_madgwick_init(esp_madgwick_conf_t* conf)
     xTaskCreate(esp_madgwick_filter_task, "esp_madgwick_filter_task", 4096, NULL, 17, NULL);
 }
 
+
 /**
  * @brief read sensors data
  * 
