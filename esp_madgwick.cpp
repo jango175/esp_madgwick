@@ -314,6 +314,18 @@ extern "C" void esp_madgwick_init(esp_madgwick_conf_t* conf)
         return;
     }
 
+    portENTER_CRITICAL(&spinlock);
+    q_attitude(0, 0) = 1.0f;
+    q_attitude(1, 0) = 0.0f;
+    q_attitude(2, 0) = 0.0f;
+    q_attitude(3, 0) = 0.0f;
+
+    q_gyro(0, 0) = 0.0f;
+    q_gyro(1, 0) = 0.0f;
+    q_gyro(2, 0) = 0.0f;
+    q_gyro(3, 0) = 0.0f;
+    portEXIT_CRITICAL(&spinlock);
+
     // init I2C bus
     i2c_master_bus_config_t i2c_mst_config;
     i2c_mst_config.clk_source = I2C_CLK_SRC_DEFAULT;
@@ -360,6 +372,9 @@ extern "C" void esp_madgwick_init(esp_madgwick_conf_t* conf)
                             QMC5883L_DATA_OUTPUT_RATE_200, QMC5883L_CONTINUOUS_MODE,
                             QMC5883L_POINTER_ROLLOVER_FUNCTION_NORMAL, QMC5883L_INTERRUPT_DISABLE);
 #endif
+
+    // wait for sensors to initialize
+    vTaskDelay(100/portTICK_PERIOD_MS);
 
     // optional calibration
     // mpu6050_calibrate_gyro(mpu);
